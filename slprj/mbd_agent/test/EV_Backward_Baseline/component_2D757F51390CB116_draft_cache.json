@@ -1,0 +1,31 @@
+{
+  "version": "2.1",
+  "component": "EV_Backward_Baseline/Transmission/Planetary_eCVT_Two_Motors",
+  "frontMatterHash": "3ab570b0d0f8ad53aefd5989d8287b25",
+  "draftMode": true,
+  "harnessFile": "C:\\Users\\menda\\OneDrive\\Documentos\\HackatonSAE\\slprj\\mbd_agent\\test\\EV_Backward_Baseline\\component_2D757F51390CB116_draft_harness.slx",
+  "portInfo": {
+    "motor_mechanical_power": {
+      "BlockPath": "component_2D757F51390CB116_draft_harness/motor_mechanical_power",
+      "BlockName": "motor_mechanical_power",
+      "Port": 1,
+      "DataType": "double",
+      "PortWidth": 1
+    },
+    "motor_speed": {
+      "BlockPath": "component_2D757F51390CB116_draft_harness/motor_speed",
+      "BlockName": "motor_speed",
+      "Port": 3,
+      "DataType": "double",
+      "PortWidth": 1
+    },
+    "motor_torque": {
+      "BlockPath": "component_2D757F51390CB116_draft_harness/motor_torque",
+      "BlockName": "motor_torque",
+      "Port": 2,
+      "DataType": "double",
+      "PortWidth": 1
+    }
+  },
+  "portInfoFidelity": "draft"
+}

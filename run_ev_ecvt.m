@@ -1,0 +1,57 @@
+% RUN_EV_ECVT Simulate the existing cycle with planetary topology 2 and verify.
+init_ev_backward;
+in = Simulink.SimulationInput('EV_Backward_Baseline');
+in = in.setVariable('EV_topology',2);
+out = sim(in);
+L = out.logsout;
+get = @(name) L.get(name).Values.Data;
+wr = get('ecvt_ring_speed'); ws = get('motor1_sun_speed');
+wc = get('motor2_carrier_speed'); tr = get('ecvt_ring_torque');
+t1 = get('motor1_torque'); t2 = get('motor2_torque');
+pm1 = get('motor1_mechanical_power'); pm2 = get('motor2_mechanical_power');
+pe1 = get('motor1_electrical_power'); pe2 = get('motor2_electrical_power');
+a = N_s/N_r; b = 1+a;
+assert(max(abs(a*ws+wr-b*wc))<1e-9,'Willis constraint failed.');
+assert(max(abs(t1+a*tr))<1e-9 && max(abs(t2-b*tr))<1e-9);
+assert(max(abs(pm1+pm2-tr.*wr))<1e-7,'Planetary power balance failed.');
+assert(max(abs(pm1-t1.*ws))<1e-7 && max(abs(pm2-t2.*wc))<1e-7);
+assert(all(abs(t1)<=ecvt_motor1_Tmax+1e-7));
+assert(all(abs(t2)<=ecvt_motor2_Tmax+1e-7));
+assert(all(abs(pm1)<=ecvt_motor1_Pmax+1e-7));
+assert(all(abs(pm2)<=ecvt_motor2_Pmax+1e-7));
+assert(all(abs(ws)<=motor1_wmax+1e-7) && all(abs(wc)<=motor2_wmax+1e-7));
+assert(all(abs(t1(pm1<0))<=ecvt_motor1_Tmax*motor1_regen_fraction+1e-7));
+assert(all(abs(t2(pm2<0))<=ecvt_motor2_Tmax*motor2_regen_fraction+1e-7));
+assert(all(abs(pm1(pm1<0))<=ecvt_motor1_Pmax*motor1_regen_fraction+1e-7));
+assert(all(abs(pm2(pm2<0))<=ecvt_motor2_Pmax*motor2_regen_fraction+1e-7));
+assert(all(pe1(pm1<0)<0) && all(pe2(pm2<0)<0));
+expected1 = pm1/EV_motor_eta; expected1(pm1<0)=pm1(pm1<0)*EV_regen_eta;
+expected2 = pm2/EV_motor_eta; expected2(pm2<0)=pm2(pm2<0)*EV_regen_eta;
+assert(max(abs(pe1-expected1))<1e-7 && max(abs(pe2-expected2))<1e-7);
+assert(max(abs(get('battery_power')-pe1-pe2))<1e-7,'Electrical adapter mismatch.');
+assert(max(abs(get('ecvt_total_electrical_power')-pe1-pe2))<1e-7);
+feasible = get('ecvt_feasible')>0.5;
+assert(all(feasible),'Default demonstration cycle must be feasible.');
+pw = get('wheel_power'); ringExpected = pw/ecvt_final_efficiency;
+ringExpected(pw<0)=pw(pw<0)*ecvt_final_efficiency;
+assert(max(abs(tr.*wr-ringExpected))<1e-7,'Final drive power balance failed.');
+assert(max(abs(wr-get('wheel_speed')*ecvt_final_ratio))<1e-9);
+free = b*wr*motor2_wmax^2/(b^2*motor2_wmax^2+a^2*motor1_wmax^2);
+J = get('ecvt_objective_J');
+assert(max(abs(J-((ws/motor1_wmax).^2+(wc/motor2_wmax).^2)))<1e-12);
+% Default cycle lies inside the envelopes, so global quadratic minimum is exact.
+assert(max(abs(wc-free))<1e-8,'Unconstrained speed optimum not achieved.');
+I = get('battery_current'); soc = get('SOC'); soh = get('SOH');
+assert(max(abs(get('battery_power')-(EV_voltage-EV_resistance*I).*I))<1e-6);
+assert(abs(soc(end)-(EV_SOC0-EV_dt*sum(I(1:end-1))/(3600*EV_capacity_Ah)))<1e-9);
+assert(all(diff(soh)<=1e-14) && all(soh>=0 & soh<=1));
+assert(all(diff(get('accumulated_degradation'))>=-1e-14));
+assert(max(abs(diff(get('Ah_throughput'))-abs(I(1:end-1))*EV_dt/3600))<1e-12);
+kdeg = get('degradation_rate'); Ah = get('Ah_throughput');
+assert(max(abs(diff(get('accumulated_degradation'))- ...
+    kdeg(1:end-1).*abs(I(1:end-1))*EV_dt/3600))<1e-12);
+fprintf('PASS: e-CVT constraints, optimum and battery/SoH integration at %d samples.\n',numel(I));
+fprintf('Final SOC %.8f, SoH %.10f, throughput %.6f Ah; feasible %.1f%%.\n', ...
+    soc(end),soh(end),Ah(end),100*mean(feasible));
+save('EV_eCVT_results.mat','out');
+plot_ev_ecvt;

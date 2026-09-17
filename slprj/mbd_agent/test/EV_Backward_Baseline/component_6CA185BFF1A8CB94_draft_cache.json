@@ -1,0 +1,52 @@
+{
+  "version": "2.1",
+  "component": "EV_Backward_Baseline/Battery Degradation",
+  "frontMatterHash": "4f0562659f634c5bff0cc6635f5b14df",
+  "draftMode": true,
+  "harnessFile": "C:\\Users\\menda\\OneDrive\\Documentos\\HackatonSAE\\slprj\\mbd_agent\\test\\EV_Backward_Baseline\\component_6CA185BFF1A8CB94_draft_harness.slx",
+  "portInfo": {
+    "AccumulatedDegradation": {
+      "BlockPath": "component_6CA185BFF1A8CB94_draft_harness/Accumulated Degradation",
+      "BlockName": "Accumulated Degradation",
+      "Port": 5,
+      "DataType": "double",
+      "PortWidth": 1
+    },
+    "AhThroughput": {
+      "BlockPath": "component_6CA185BFF1A8CB94_draft_harness/Ah Throughput",
+      "BlockName": "Ah Throughput",
+      "Port": 1,
+      "DataType": "double",
+      "PortWidth": 1
+    },
+    "C_rate": {
+      "BlockPath": "component_6CA185BFF1A8CB94_draft_harness/C-rate",
+      "BlockName": "C-rate",
+      "Port": 3,
+      "DataType": "double",
+      "PortWidth": 1
+    },
+    "DegradationRate": {
+      "BlockPath": "component_6CA185BFF1A8CB94_draft_harness/Degradation Rate",
+      "BlockName": "Degradation Rate",
+      "Port": 4,
+      "DataType": "double",
+      "PortWidth": 1
+    },
+    "SoH": {
+      "BlockPath": "component_6CA185BFF1A8CB94_draft_harness/SoH",
+      "BlockName": "SoH",
+      "Port": 6,
+      "DataType": "double",
+      "PortWidth": 1
+    },
+    "equivalent_full_cycles": {
+      "BlockPath": "component_6CA185BFF1A8CB94_draft_harness/equivalent_full_cycles",
+      "BlockName": "equivalent_full_cycles",
+      "Port": 2,
+      "DataType": "double",
+      "PortWidth": 1
+    }
+  },
+  "portInfoFidelity": "draft"
+}
