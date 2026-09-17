@@ -1,9 +1,10 @@
 # Pure-electric planetary e-CVT
 
 Run `run_ev_ecvt` from this folder to initialize, select topology 2, simulate
-the existing 160 s cycle, validate every sample, and produce
-`EV_eCVT_results.mat`, `EV_eCVT_plots.png` and `EV_eCVT_plots.fig`.
-For interactive runs, run `init_ev_backward`, set `EV_topology = 2`, and Run.
+the existing 160 s cycle, validate every sample, save `EV_eCVT_results.mat`,
+and call `plot_results` for all subsystem figures. Set
+`plot_export_folder = 'results'` before running to export PNG/FIG files.
+For interactive runs, run `initialize_model`, set `EV_topology = 2`, and Run.
 Set `EV_topology = 1` to return to the existing fixed-gear choice.
 
 The new choice is `Transmission/Planetary_eCVT_Two_Motors`. The original
@@ -105,7 +106,7 @@ This baseline uses Interpreted MATLAB Function blocks to call the shared,
 readable `.m` functions, so keep those files on the MATLAB path. It is a
 normal-mode simulation prototype, not a code-generation implementation.
 
-## Parameters in init_ev_backward.m
+## Parameters in initialize_model.m
 
 | Parameter | Default | Meaning |
 |---|---:|---|

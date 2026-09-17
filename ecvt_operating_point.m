@@ -1,7 +1,7 @@
 function y = ecvt_operating_point(requestedTorque, requestedSpeed, p)
 %ECVT_OPERATING_POINT Quasi-static planetary, Sun=M1, Carrier=M2, Ring=output.
 % Fixed output vector documented in README_eCVT.md. SI units.
-% Parameter vector is defined only in init_ev_backward.m.
+% Parameter vector is defined only in initialize_model.m.
 %#codegen
 a = p(1)/p(2); b = 1+a;
 % Kinematically achievable ring range with both motor speeds bounded.

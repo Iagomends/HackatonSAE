@@ -157,7 +157,7 @@
     <P Name="SysArchSUTModel"/>
   </Harness>
   <ModelMetadata>
-    <P Name="ModelUUID">5f4607cd-063f-43b6-93ba-0db43a691c5b</P>
+    <P Name="ModelUUID">4d1876ce-b1ce-4b02-a35d-9fd4bd3908ab</P>
     <P Name="OwnerBDName">EV_Backward_Baseline</P>
   </ModelMetadata>
 </HarnessInformation>

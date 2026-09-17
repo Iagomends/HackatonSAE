@@ -1,0 +1,186 @@
+% PLOT_RESULTS Visualize completed EV_Backward_Baseline simulations.
+% Preferred input: out = sim("EV_Backward_Baseline"). No simulation or init here.
+% Also accepts ans when sim was called without assigning its return value.
+% Optional comparison: comparison_outputs = {out_fixed, out_ecvt};
+%                      comparison_labels = {'Fixed gear','Planetary e-CVT'};
+% Optional export: plot_export_folder = 'results'; (default: no file export).
+% Add/edit a panel by changing its signal names, legend, title, units and scale.
+
+%% Logged simulation results
+if exist('out','var') && isa(out,'Simulink.SimulationOutput')
+    EV_result = out;
+elseif exist('ans','var') && isa(ans,'Simulink.SimulationOutput') %#ok<NOANS>
+    EV_result = ans; %#ok<NOANS> Support the unassigned sim workflow explicitly.
+else
+    error('EV:MissingResults', ...
+        'Run out = sim("EV_Backward_Baseline") or load a saved out before plotting.');
+end
+EV_plot_logs = EV_result.logsout;
+EV_plot_names = EV_plot_logs.getElementNames;
+EV_has_ecvt = any(strcmp(EV_plot_names,'motor1_sun_speed'));
+% Replace only this script's previous figures; leave other figures untouched.
+delete(findall(groot,'Type','figure','-regexp','Tag','^EVResults_'));
+EV_figures = struct;
+
+%% Vehicle Dynamics
+EV_figures.vehicle = plotGroup(EV_plot_logs,'Vehicle dynamics','vehicle', {
+    {'vehicle_speed'}, {'Vehicle'}, 'Prescribed vehicle speed', 'Speed [m/s]', 1;
+    {'vehicle_acceleration'}, {'Vehicle'}, 'Vehicle acceleration', 'Acceleration [m/s^2]', 1;
+    {'wheel_force'}, {'Required force'}, 'Required tractive force', 'Force [N]', 1});
+
+%% Wheel Results
+EV_figures.wheels = plotGroup(EV_plot_logs,'Wheel results','wheels', {
+    {'wheel_speed'}, {'Wheels'}, 'Wheel angular speed', 'Speed [rad/s]', 1;
+    {'wheel_torque'}, {'Required torque'}, 'Wheel torque', 'Torque [N m]', 1;
+    {'wheel_power'}, {'Required power'}, 'Wheel mechanical power', 'Power [kW]', 1e-3});
+
+%% Motor Results
+% Read topology from the completed logs, not today's workspace selector.
+% A fixed-gear run has one motor; do not invent zero traces for Motor 2.
+if EV_has_ecvt
+    EV_motor_panels = {
+        {'motor1_sun_speed','motor2_carrier_speed'}, {'Motor 1 / Sun','Motor 2 / Carrier'}, 'Motor shaft speeds', 'Speed [rad/s]', 1;
+        {'motor1_torque','motor2_torque'}, {'Motor 1','Motor 2'}, 'Motor shaft torques', 'Torque [N m]', 1;
+        {'motor1_mechanical_power','motor2_mechanical_power'}, {'Motor 1','Motor 2'}, 'Motor mechanical powers', 'Power [kW]', 1e-3;
+        {'motor1_electrical_power','motor2_electrical_power'}, {'Motor 1','Motor 2'}, 'Motor electrical powers', 'Power [kW]', 1e-3};
+else
+    EV_motor_panels = {
+        {'motor_speed'}, {'Motor 1'}, 'Motor shaft speed', 'Speed [rad/s]', 1;
+        {'motor_torque'}, {'Motor 1'}, 'Motor shaft torque', 'Torque [N m]', 1;
+        {'motor_mechanical_power'}, {'Motor 1'}, 'Motor mechanical power', 'Power [kW]', 1e-3;
+        {'motor_electrical_power'}, {'Motor 1'}, 'Motor electrical power', 'Power [kW]', 1e-3};
+end
+EV_figures.motors = plotGroup(EV_plot_logs,'Electric motor results','motors',EV_motor_panels);
+
+%% Planetary e-CVT Results
+% These signals exist only when the planetary variant was active.
+if EV_has_ecvt
+    EV_figures.ecvt = plotGroup(EV_plot_logs,'Planetary e-CVT results','ecvt', {
+        {'motor1_sun_speed','ecvt_ring_speed','motor2_carrier_speed'}, {'Sun','Ring','Carrier'}, 'Planetary shaft speeds', 'Speed [rad/s]', 1;
+        {'ecvt_objective_J'}, {'J'}, 'Operating-point objective', 'Objective J [-]', 1;
+        {'ecvt_feasible'}, {'Feasible'}, 'Request feasibility (1 = feasible)', 'Flag [0 or 1]', 1;
+        {'ecvt_requested_ring_torque','ecvt_ring_torque'}, {'Requested','Delivered'}, 'Ring torque', 'Torque [N m]', 1;
+        {'ecvt_requested_ring_speed','ecvt_ring_speed'}, {'Requested','Delivered'}, 'Ring speed', 'Speed [rad/s]', 1;
+        {'ecvt_mechanical_power','ecvt_total_electrical_power'}, {'Ring mechanical','Total electrical'}, 'Planetary power', 'Power [kW]', 1e-3;
+        {'ecvt_torque_shortfall'}, {'Unserved torque'}, 'Ring torque shortfall', 'Torque [N m]', 1;
+        {'ecvt_speed_shortfall'}, {'Unserved speed'}, 'Ring speed shortfall', 'Speed [rad/s]', 1});
+end
+
+%% Battery Results
+EV_figures.battery = plotGroup(EV_plot_logs,'Battery results','battery', {
+    {'battery_power'}, {'Battery'}, 'Battery terminal power (+ discharge)', 'Power [kW]', 1e-3;
+    {'battery_current'}, {'Battery'}, 'Battery current (+ discharge)', 'Current [A]', 1;
+    {'battery_Crate'}, {'Absolute C-rate'}, 'Battery C-rate', 'C-rate [C = A/Ah]', 1;
+    {'SOC'}, {'SOC'}, 'State of charge', 'SOC [%]', 100});
+
+%% Battery Degradation / SoH
+% Lookup coefficient [1/Ah] and actual capacity-loss rate [1/s] are distinct.
+EV_figures.degradation = plotGroup(EV_plot_logs,'Battery degradation / SoH','degradation', {
+    {'SOH'}, {'SoH'}, 'State of health (zoomed axis)', 'SoH [%]', 100;
+    {'degradation_rate'}, {'Lookup coefficient'}, 'C-rate-dependent degradation coefficient', 'Loss per throughput [1/Ah]', 1;
+    {'capacity_loss_rate'}, {'Capacity loss rate'}, 'Instantaneous degradation rate', 'Loss rate [1/s]', 1;
+    {'accumulated_degradation'}, {'Accumulated loss'}, 'Accumulated capacity degradation', 'Capacity loss [%]', 100;
+    {'Ah_throughput'}, {'Absolute throughput'}, 'Battery charge throughput', 'Throughput [Ah]', 1;
+    {'equivalent_full_cycles'}, {'Equivalent full cycles'}, 'Equivalent full cycles', 'Cycles [-]', 1});
+
+%% Powertrain Comparison
+% Supply completed runs explicitly: this section never loads or simulates.
+% Each run keeps its own time vector. Use the same cycle/settings for a fair
+% comparison; SOC/SoH and energy differences otherwise include those changes.
+if exist('comparison_outputs','var') && ~isempty(comparison_outputs)
+    assert(iscell(comparison_outputs) && numel(comparison_outputs) >= 2, ...
+        'comparison_outputs must be a cell array of at least two completed runs.');
+    if exist('comparison_labels','var') && ~isempty(comparison_labels)
+        EV_comparison_labels = cellstr(comparison_labels);
+        assert(numel(EV_comparison_labels) == numel(comparison_outputs), ...
+            'Provide one comparison label per completed run.');
+    else
+        EV_comparison_labels = arrayfun(@(k) sprintf('Run %d',k), ...
+            1:numel(comparison_outputs),'UniformOutput',false);
+    end
+    EV_figures.comparison = plotComparison(comparison_outputs,EV_comparison_labels);
+end
+
+%% Optional figure export
+if exist('plot_export_folder','var') && strlength(string(plot_export_folder)) > 0
+    if ~isfolder(plot_export_folder), mkdir(plot_export_folder); end
+    EV_figure_names = fieldnames(EV_figures);
+    for EV_figure_index = 1:numel(EV_figure_names)
+        EV_figure_name = EV_figure_names{EV_figure_index};
+        EV_export_base = fullfile(plot_export_folder,['EV_' EV_figure_name]);
+        exportgraphics(EV_figures.(EV_figure_name),[EV_export_base '.png'],'Resolution',160);
+        savefig(EV_figures.(EV_figure_name),[EV_export_base '.fig']);
+    end
+end
+
+%% Plotting helpers
+function fig = plotGroup(logs,figureTitle,tag,panels)
+    fig = figure('Name',figureTitle,'Tag',['EVResults_' tag], ...
+        'Color','w','Position',[70 50 1100 740]);
+    count = size(panels,1);
+    cols = min(2,count);
+    layout = tiledlayout(fig,ceil(count/cols),cols,'TileSpacing','compact','Padding','compact');
+    axesHandles = gobjects(count,1);
+    available = logs.getElementNames;
+    for panel = 1:count
+        ax = nexttile(layout);
+        axesHandles(panel) = ax;
+        hold(ax,'on');
+        names = panels{panel,1};
+        labels = panels{panel,2};
+        for signal = 1:numel(names)
+            assert(any(strcmp(available,names{signal})), ...
+                'EV:MissingSignal','Required logged signal is missing: %s',names{signal});
+            trace = logs.get(names{signal}).Values;
+            if strcmp(names{signal},'ecvt_feasible')
+                stairs(ax,trace.Time,trace.Data*panels{panel,5},'LineWidth',1.3);
+                ylim(ax,[-0.05 1.05]); yticks(ax,[0 1]);
+            else
+                plot(ax,trace.Time,trace.Data*panels{panel,5},'LineWidth',1.3);
+            end
+        end
+        formatAxes(ax,panels{panel,3},panels{panel,4},labels);
+        if any(strcmp(names,'SOH'))
+            ax.YAxis.Exponent = 0;
+            ytickformat(ax,'%.5f');
+        end
+    end
+    linkaxes(axesHandles,'x');
+    title(layout,figureTitle);
+end
+
+function fig = plotComparison(outputs,labels)
+    fig = figure('Name','Powertrain comparison','Tag','EVResults_comparison', ...
+        'Color','w','Position',[70 50 1100 740]);
+    layout = tiledlayout(fig,3,2,'TileSpacing','compact','Padding','compact');
+    panels = {'vehicle_speed','Prescribed speed','Speed [m/s]',1;
+        'battery_power','Battery terminal power','Power [kW]',1e-3;
+        'battery_current','Battery current','Current [A]',1;
+        'SOC','State of charge','SOC [%]',100;
+        'SOH','State of health','SoH [%]',100;
+        'accumulated_degradation','Accumulated capacity loss','Capacity loss [%]',100};
+    axesHandles = gobjects(size(panels,1),1);
+    for panel = 1:size(panels,1)
+        ax = nexttile(layout); axesHandles(panel) = ax; hold(ax,'on');
+        for runIndex = 1:numel(outputs)
+            assert(isa(outputs{runIndex},'Simulink.SimulationOutput'), ...
+                'Each comparison entry must be a Simulink.SimulationOutput.');
+            trace = outputs{runIndex}.logsout.get(panels{panel,1}).Values;
+            plot(ax,trace.Time,trace.Data*panels{panel,4},'LineWidth',1.3);
+        end
+        formatAxes(ax,panels{panel,2},panels{panel,3},labels);
+        if strcmp(panels{panel,1},'SOH')
+            ax.YAxis.Exponent = 0; ytickformat(ax,'%.5f');
+        end
+    end
+    linkaxes(axesHandles,'x');
+    title(layout,'Completed powertrain simulations');
+end
+
+function formatAxes(ax,panelTitle,units,labels)
+    grid(ax,'on');
+    xlabel(ax,'Time [s]');
+    ylabel(ax,units);
+    legend(ax,labels,'Location','best','Interpreter','none');
+    title(ax,panelTitle);
+end

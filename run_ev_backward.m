@@ -1,5 +1,5 @@
 % RUN_EV_BACKWARD Initialize, simulate, and check the backward EV baseline.
-init_ev_backward;
+initialize_model;
 in = Simulink.SimulationInput('EV_Backward_Baseline');
 out = sim(in);
 EV_logs = out.logsout;
@@ -56,4 +56,4 @@ fprintf('Final SOC %.6f; throughput %.6f Ah; EFC %.8f.\n', ...
 fprintf('Battery current range: %.3f to %.3f A.\n',min(EV_I),max(EV_I));
 fprintf('Final SoH %.10f; accumulated loss %.10g; peak C-rate %.6f C.\n', ...
     EV_soh(end),EV_D(end),max(EV_Crate));
-plot_ev_soh;
+plot_results;

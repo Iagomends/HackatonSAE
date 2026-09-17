@@ -1,6 +1,6 @@
 % CHECK_ECVT_LIMITS Exercise infeasible torque/speed and constrained optimum.
 % Shared operating-point solver used by the Simulink variant.
-init_ev_backward;
+initialize_model;
 requests = [1e5 0; 1e5 500; -1e5 500; 0 15000; 100 15000; ...
     -100 -15000; 300 1000; -300 -1000; 0 0];
 for k = 1:size(requests,1)

@@ -5,13 +5,13 @@ See [README_eCVT.md](README_eCVT.md) for equations, sizing, interface semantics,
 limits, validation and plots. Run `run_ev_ecvt` to exercise it. Topology 1
 retains the original behavior described below.
 
-Run `init_ev_backward`, then open `EV_Backward_Baseline.slx` and press Run.
+Run `initialize_model`, then open `EV_Backward_Baseline.slx` and press Run.
 Run the initialization script once before compiling or simulating; it is not
 automatically rerun, so workspace parameter changes are preserved.
 `run_ev_backward.m` initializes, simulates, checks the results and saves them.
 
 The prescribed speed is the independent input. There is no driver or forward
-vehicle dynamics. Replace the speed/time knots in `init_ev_backward.m` to use
+vehicle dynamics. Replace the speed/time knots in `initialize_model.m` to use
 another cycle. Speed is in m/s, time in seconds and grade in radians. The
 sampled speed is differentiated by a backward difference at `EV_dt` seconds;
 initial acceleration is zero. Discontinuous speed inputs should be avoided.
@@ -43,7 +43,7 @@ initial acceleration is zero. Discontinuous speed inputs should be avoided.
   `EV_dt`; throughput begins at zero independently of initial SOC.
 - **Outputs:** named signals are logged in `out.logsout` as a Dataset.
 
-All physical assumptions are in `init_ev_backward.m`. Battery power above
+All physical assumptions are in `initialize_model.m`. Battery power above
 `V_oc^2/(4*R)` (for R > 0) or SOC outside [0,1] terminates simulation through
 assertions. This is an unconstrained demand calculation: motor torque/speed,
 battery charge-current limits, friction brake blending, auxiliary loads,
@@ -107,7 +107,7 @@ the tabulated range. Therefore kdeg increases with C-rate on the supplied
 strictly increasing curve, but plateaus above 4 C. This avoids extrapolating
 an uncalibrated aging curve.
 
-Editable SoH-related parameters in `init_ev_backward.m`:
+Editable SoH-related parameters in `initialize_model.m`:
 
 | Parameter | Default | Meaning |
 |---|---|---|
@@ -130,10 +130,12 @@ as a battery life prediction. No temperature, SOC-dependent or calendar aging
 is included.
 
 Run `run_ev_backward` to simulate, verify monotonicity and zero-current behavior,
-save the results, and generate `EV_Battery_SoH.png` plus an interactive MATLAB
-figure `EV_Battery_SoH.fig`. The six time plots show SOC, SoH, signed current,
-C-rate, kdeg and dD/dt. The SoH axis is deliberately zoomed to make its small
-single-cycle change visible. Additional component scenarios are in
+save the results, and call the consolidated `plot_results` script. Battery and
+degradation panels show SOC, SoH, current, C-rate, kdeg, dD/dt, accumulated
+degradation, Ah throughput and equivalent full cycles. Set
+`plot_export_folder = 'results'` to export PNG/FIG files; otherwise figures are
+interactive only. The SoH axis is zoomed to make its small single-cycle change
+visible. Additional component scenarios are in
 `battery_soh.feature` for the Simulink `model_test` tool.
 
 The added logged signals are `battery_Crate`, `degradation_rate`,

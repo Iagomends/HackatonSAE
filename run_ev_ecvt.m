@@ -1,5 +1,5 @@
 % RUN_EV_ECVT Simulate the existing cycle with planetary topology 2 and verify.
-init_ev_backward;
+initialize_model;
 in = Simulink.SimulationInput('EV_Backward_Baseline');
 in = in.setVariable('EV_topology',2);
 out = sim(in);
@@ -54,4 +54,4 @@ fprintf('PASS: e-CVT constraints, optimum and battery/SoH integration at %d samp
 fprintf('Final SOC %.8f, SoH %.10f, throughput %.6f Ah; feasible %.1f%%.\n', ...
     soc(end),soh(end),Ah(end),100*mean(feasible));
 save('EV_eCVT_results.mat','out');
-plot_ev_ecvt;
+plot_results;
