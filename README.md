@@ -1,5 +1,27 @@
 # HackatonSAE
 
+## Three-case route dashboard
+
+Run `run_route_comparison` for the fixed-gear baseline, existing local
+degradation e-CVT controller, and route-aware predictive e-CVT controller.
+All cases use the unchanged predefined route, vehicle, battery, 80% initial
+SOC, and 160 kW / 900 Nm total installed motor ratings. The runner creates
+the dashboard in `plot_results.m`, per-case CSV logs, a summary CSV and a MAT
+file containing complete simulation outputs and the predictive value table.
+
+The organization remains `initialize_model.m`, the existing
+`EV_Backward_Baseline.slx` model, and `plot_results.m`. No duplicate vehicle or
+battery model is used. See [route controller details](README_route_control.md)
+and [validation results](validation/route_control.md).
+
+To reopen the saved dashboard: `load EV_route_comparison.mat; plot_results`.
+Clear `route_comparison` to return to the original single-run plots.
+
+Run `run_route_sensitivity` for the required initial-SOC study at 30%, 35%,
+40% and 50%. It reports when predictive SOC approaches the remaining-route
+requirement and plots SOC, reserve, regeneration, route progress, wheel power,
+and predicted remaining energy.
+
 ## MATLAB / Simulink workflow
 
 From this folder:

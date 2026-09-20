@@ -17,9 +17,10 @@ EV_topology = 1;             % 1: single motor/fixed gear; 2: planetary e-CVT [-
 
 %% Drive Cycle
 % User-defined parameters
-% Illustrative prescribed cycle; not a standardized certification cycle.
-EV_cycle_time = [0 5 25 55 70 80 100 130 150 160]'; % Speed-knot times [s]
-EV_cycle_speed = [0 0 15 15 0 0 25 25 0 0]';       % Speed at each knot [m/s]
+% Mixed urban/highway route with repeated smooth acceleration and braking
+% events distributed over the beginning, middle, and end of the route.
+EV_route_name = 'motorway_service_area';
+[EV_cycle_time,EV_cycle_speed] = ev_route_profile(EV_route_name);
 
 % Derived parameters
 EV_time = (0:EV_dt:EV_cycle_time(end))';            % Sample times [s]
@@ -100,6 +101,7 @@ assert(all([EV_motor_eta EV_regen_eta] > 0) && ...
 % User-defined parameters
 N_s = 30;                   % Sun tooth count [teeth]
 N_r = 78;                   % Ring tooth count; planet = (N_r-N_s)/2 [teeth]
+ecvt_strategy = 3;          % 1: normalized speed; 2: |Ibat|; 3: Ddot [1/s]
 
 % Derived parameters
 ecvt_final_ratio = EV_final; % Ring/wheel speed ratio [-]
@@ -118,9 +120,13 @@ assert(all(ecvt_parameters(9:12) > 0 & ecvt_parameters(9:12) <= 1));
 EV_voltage = 360;            % Constant open-circuit pack voltage [V]
 EV_resistance = 0.08;        % Pack internal resistance [ohm]
 EV_capacity_Ah = 150;        % Nominal capacity; 54 kWh at nominal voltage [Ah]
-EV_SOC0 = 0.80;              % Initial state of charge [fraction]
+EV_SOC0 = 0.35;              % Initial state of charge [fraction]
 EV_SOC_min = 0;              % Lower SOC assertion limit [fraction]
 EV_SOC_max = 1;              % Upper SOC assertion limit [fraction]
+SOC_min_preferred = 0.20;    % Reporting/preferred range, not a hard path floor
+SOC_max_preferred = 0.80;
+SOC_min_predictive = 0.205;  % Numerical reserve for the predictive pathwise constraint
+SOC_terminal_min  = 0.20;    % Route-aware terminal constraint only
 assert(EV_capacity_Ah > 0 && EV_voltage > 0 && EV_resistance >= 0);
 assert(EV_SOC0 > EV_SOC_min && EV_SOC0 < EV_SOC_max);
 
@@ -147,12 +153,34 @@ assert(all(isfinite(degradation_rate)) && all(degradation_rate >= 0) && ...
     all(diff(degradation_rate) >= 0), 'Use nonnegative, nondecreasing loss/Ah.');
 assert(isfinite(EV_SOH0) && EV_SOH0 >= 0 && EV_SOH0 <= 1);
 
+% Controller receives the SAME battery/aging parameters as the plant.
+% Entries 13:17: strategy, Voc, R, Qnom, number of lookup breakpoints;
+% followed by C-rate breakpoints and loss/Ah values. Repack after overrides.
+ecvt_parameters = [ecvt_parameters ecvt_strategy EV_voltage EV_resistance ...
+    EV_capacity_Ah numel(degradation_Crate) degradation_Crate(:)' degradation_rate(:)'];
+
 %% Logging and Simulation Settings
 % User-defined parameters
 EV_start = 0;               % Simulation start time [s]
 
 % Derived parameters
 EV_stop = EV_time(end);     % Simulation stop time [s]
+
+%% Route comparison (0 preserves the original interactive powertrain path)
+EV_route_case = 0;          % 1: fixed gear; 2: local e-CVT; 3: predictive e-CVT
+EV_route_soc_nodes = 51;    % Numerical resolution, not a vehicle tuning parameter
+EV_route_regen_nodes = 11;
+EV_route_config = struct('p',ecvt_parameters,'dt',EV_dt,'time',EV_time, ...
+    'speed',EV_speed,'v0',EV_v0,'mass',EV_mass,'g',EV_g,'rho',EV_rho, ...
+    'Cd',EV_Cd,'area',EV_area,'Crr',EV_Crr,'grade',EV_grade, ...
+    'radius',EV_radius,'final',EV_final,'etaDrive',EV_drive_eta, ...
+    'gear',EV_gear,'Tmax',vehicle_max_motor_torque,'Pmax',vehicle_max_motor_power, ...
+    'wmax',motor1_wmax,'initialSOC',EV_SOC0,'terminalSOC',SOC_terminal_min, ...
+    'predictiveMin',SOC_min_predictive, ...
+    'preferredMin',SOC_min_preferred,'preferredMax',SOC_max_preferred, ...
+    'socNodes',EV_route_soc_nodes,'regenNodes',EV_route_regen_nodes);
+% Prepared once by run_route_comparison; no simulation is run by initialization.
+EV_route_plan = struct;
 % The model stores enum/string settings: FixedStepDiscrete, fixed step EV_dt,
 % SignalLogging='on', SignalLoggingName='logsout', ReturnWorkspaceOutputs='on'.
 % These settings are not executable commands in this initialization script.

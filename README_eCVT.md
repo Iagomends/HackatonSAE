@@ -1,173 +1,136 @@
-# Pure-electric planetary e-CVT
+# Planetary e-CVT operating-point controller
 
-Run `run_ev_ecvt` from this folder to initialize, select topology 2, simulate
-the existing 160 s cycle, validate every sample, save `EV_eCVT_results.mat`,
-and call `plot_results` for all subsystem figures. Set
-`plot_export_folder = 'results'` before running to export PNG/FIG files.
-For interactive runs, run `initialize_model`, set `EV_topology = 2`, and Run.
-Set `EV_topology = 1` to return to the existing fixed-gear choice.
+Run `run_ev_ecvt` for the default degradation-minimizing controller and
+constraint/battery integration checks. Run `run_ecvt_comparison` to simulate
+all three strategies on the same prescribed cycle and save:
 
-The new choice is `Transmission/Planetary_eCVT_Two_Motors`. The original
-variant was not changed. The vehicle, drive cycle, battery and degradation
-equations were not changed. All variant ports retain their names, order,
-scalar dimensions and SI units.
+- `EV_eCVT_comparison.mat`: simulation outputs, labels and per-strategy tables.
+- `EV_eCVT_strategy_1.csv`, `_2.csv`, `_3.csv`: time-aligned selected points.
 
-## Mechanical equations and sign convention
+For interactive simulation, run `initialize_model`, set `EV_topology=2`, then
+set `ecvt_strategy` to 1 (minimum normalized motor speed), 2 (minimum absolute
+battery current), or 3 (minimum instantaneous battery degradation, default).
+Topology 1 retains the original single-motor fixed-gear model.
 
-Motor 1 is attached to the sun, Motor 2 to the carrier, and the ring to the
-final drive. The planetary is ideal, with no inertias or friction. The final
-drive includes the lumped `ecvt_final_efficiency` loss.
+## Mechanical constraints
 
-Let `a = N_s/N_r`, `b = 1+a`. Motor torques are applied TO the gearset. `T_R`
-is delivered BY the ring to the output, so the external torque applied to the
-ring gear is `-T_R`.
+Motor 1 drives the sun, Motor 2 the carrier, and the ring drives the wheels.
+For `a=N_s/N_r`, `b=1+a`, the ideal, quasi-static planetary obeys:
 
 ```text
-a*w_s + w_r = b*w_c                  Willis, valid also at standstill
-T_M1 = -a*T_R
-T_M2 =  b*T_R
-T_M1 + T_M2 - T_R = 0                torque equilibrium
-T_M1*w_s + T_M2*w_c = T_R*w_r         ideal mechanical power balance
+a*ws + wr = b*wc
+T1 = -a*Tr; T2 = b*Tr
+Pm1 = T1*ws; Pm2 = T2*wc
+Pm1 + Pm2 = Tr*wr
 ```
 
-The torque relations follow from virtual work on the speed constraint:
-the applied torque vector is proportional to `[a, 1, -b]` at the
-sun/ring/carrier ports. Thus the two torques cannot be independently split.
-The available control freedom is **internal speed selection**.
+The final-drive equations are unchanged: `wr=final_ratio*wheel_speed` and
+`Tr=wheel_torque/(final_ratio*eta_final)` in motoring, or
+`Tr=wheel_torque*eta_final/final_ratio` in regeneration. Power sign determines
+the mode, including reverse travel. For a fixed ring request, motor torques
+are fixed by equilibrium; the controller selects internal carrier speed.
+Every candidate respects each motor's torque, mechanical power and speed
+limits, including its generating torque/power derating.
 
-The ring request is `w_r = final_ratio*w_wheel`. For nonnegative requested
-wheel power, `T_R_req = T_wheel/(final_ratio*eta_final)`; for regeneration,
-`T_R_req = T_wheel*eta_final/final_ratio`. Negative travel is supported using
-power signs, not speed signs alone.
+The solver intersects the feasible carrier-speed intervals for all four
+shaft-speed sign combinations. With the existing directional constant
+motor efficiencies, battery power is affine in carrier speed in each interval.
+It also excludes demands above the existing battery's real-current limit
+`Voc^2/(4*R)` when `R>0`.
 
-## Exact speed selection, without Optimization Toolbox
+An impossible request retains the existing fallback: cap ring speed at its
+kinematic limit, then use 55 bisection iterations to find the largest feasible
+torque fraction. `ecvt_feasible=0` and torque/speed shortfalls explicitly mark
+unserved demand. Delivered power is logged; the prescribed cycle is unchanged.
 
-The shared function `ecvt_operating_point.m` minimizes
+## Candidate evaluation and objective
+
+`ecvt_candidate_metrics.m` evaluates every candidate using the existing laws:
 
 ```text
-J = (w_s/w_M1_max)^2 + (w_c/w_M2_max)^2
-w_s = (b*w_c-w_r)/a
+eta_i = EV_motor_eta if Pmi >= 0, otherwise EV_regen_eta
+Pei = Pmi/eta_i      if Pmi >= 0, otherwise Pmi*eta_i
+Pbat = Pe1 + Pe2
+Ibat = 2*Pbat / (Voc + sqrt(Voc^2 - 4*R*Pbat))
+C = abs(Ibat)/Qnom
+kdeg = linear lookup(C), with clipped endpoints             [1/Ah]
+Ddot = kdeg * abs(Ibat)/3600                                [1/s]
 ```
 
-The unconstrained minimizer is
+The battery current formula also works at zero resistance. The efficiencies
+are selected from the candidate torque/speed power direction. No efficiency
+map exists in this model, so no new speed-dependent losses or maps are invented.
+The vehicle, battery, SOC and aging integration laws and numerical parameters
+are unchanged.
 
-```text
-w_c_free = b*w_r*w_M2_max^2 / (b^2*w_M2_max^2 + a^2*w_M1_max^2)
-```
+| Strategy | Primary objective J | Secondary objective |
+|---|---|---|
+| 1 | `(ws/w1max)^2 + (wc/w2max)^2` | None |
+| 2 | `abs(Ibat)` | Normalized speed |
+| 3 (default) | `Ddot` | Normalized speed |
 
-For fixed requested torque, both motor torques are fixed. Each motor has
-`abs(T)<=Tmax`, `abs(w)<=wmax`, `abs(T*w)<=Pmax`, equivalently a
-constant-torque/constant-power envelope. Generating torque/power bounds are
-multiplied by that motor's regeneration fraction. All four shaft-speed sign
-combinations are considered; in each, power signs and envelope bounds are
-known. These constraints produce a closed interval of feasible carrier
-speeds. Project `w_c_free` onto each nonempty interval and choose the lowest
-J. This is the global scalar quadratic minimum, including generating cases.
+The candidate set contains interval endpoints, the projected unconstrained
+speed minimum, zero-battery-power crossings, and aging lookup breakpoint
+crossings. This finds a global optimum for the existing constant-efficiency,
+nonnegative nondecreasing aging model, including flat regions. It is not a
+coarse speed grid. Only numerical ties (64 floating-point spacings of the
+objective magnitude) use the secondary objective; no weighted speed penalty
+is added to battery degradation. A future efficiency-map model would require
+revisiting this affine-interval search.
 
-If torque demand is infeasible, 55 bisection steps find the largest feasible
-fraction of the requested ring torque; the planetary torque ratios are
-preserved, and speed minimization is then repeated. No torque is silently
-redistributed between machines.
+Because the existing aging curve is nondecreasing in absolute C-rate,
+strategies 2 and 3 normally coincide. Minimizing degradation alone can favor
+internal power circulation during braking to reduce charging current. Thus
+less degradation does not necessarily mean more energy recovered or higher
+final SOC. No energy-recovery preference has been added to the requested objective.
 
-The maximum kinematically achievable absolute ring speed is
-`a*w_M1_max+b*w_M2_max`. Beyond this, no solution can both preserve imposed
-ring speed and respect motor speed bounds. The model caps the achievable
-ring speed, logs a speed shortfall, and marks the request infeasible.
-The prescribed vehicle cycle is not altered. Any flagged sample therefore
-represents an **unserved operating request**, not successful tracking of that
-cycle. Battery energy at such samples covers delivered power only.
+## Interfaces, parameters and logging
 
-## Preserving the existing scalar interface
+The transmission's three external outputs still represent the equivalent
+ring shaft: mechanical power, torque and speed. The electrical adapter
+reconstructs the same deterministic selected point, so efficiencies are
+applied exactly once. Both controller and adapter receive the same strategy,
+battery parameters and aging curve directly from workspace expressions;
+`SimulationInput` overrides of these parameters are respected.
 
-The variant outputs remain `motor_mechanical_power`, `motor_torque` and
-`motor_speed`. For the e-CVT these represent the **equivalent ring shaft**:
-`T_R*w_r`, `T_R`, `w_r`, not an individual electric motor. The true two-machine
-quantities are logged explicitly with `motor1_...` and `motor2_...` names.
+`ecvt_parameters` for direct MATLAB calls has entries 1:12 unchanged (sun/ring
+teeth, torque limits, power limits, speed limits, motoring/generating efficiencies,
+and generating fractions). Entries 13:17 are strategy, Voc, R, Qnom and lookup
+length; the C-rate breakpoints and loss/Ah coefficients follow. Update this
+vector as well when overriding parameters for direct function calls.
 
-The existing external Motor subsystem now has a topology-selected electrical
-branch. Its original efficiency blocks and single-motor computation are intact.
-For topology 2, `ecvt_electrical_power.m` uses the same shared operating-point
-function to reconstruct the two motors from delivered ring torque/speed.
-The unique minimum makes reconstruction deterministic, including saturated
-torque cases. This avoids adding ports, hidden global signal routing, or
-misrepresenting electrical power as mechanical power.
+`ecvt_operating_point` returns this 24-element column vector:
 
-Each motor uses exactly the original efficiency law:
+| Indices | Contents |
+|---|---|
+| 1:3 | Delivered ring torque, speed, mechanical power |
+| 4:7 | Motor 1/2 speeds, Motor 1/2 torques |
+| 8:12 | Motor 1/2 mechanical powers, Motor 1/2 electrical powers, battery power |
+| 13:18 | J, feasible flag, requested torque/speed, torque/speed shortfalls |
+| 19:24 | Motor 1/2 efficiencies, signed battery current, absolute C-rate, kdeg, Ddot |
 
-```text
-P_el_i = P_mech_i / EV_motor_eta      if P_mech_i >= 0
-P_el_i = P_mech_i * EV_regen_eta      otherwise
-P_battery = P_el_1 + P_el_2
-```
+Existing motor and planetary logs retain their names. Added logs are
+`motor1_efficiency`, `motor2_efficiency`, `ecvt_battery_current`,
+`ecvt_battery_Crate`, `ecvt_loss_per_Ah`, and `ecvt_degradation_rate`.
+The original `degradation_rate` log remains the lookup coefficient in `1/Ah`;
+`ecvt_degradation_rate` is the instantaneous rate in `1/s`.
+Each comparison CSV includes selected torques, speeds, efficiencies,
+mechanical/electrical powers, battery current, C-rate, kdeg, Ddot, objective,
+and feasibility at every simulation sample. Full SimulationOutput objects
+also retain SOC, SOH, accumulated degradation and all other model logs.
 
-The sum reaches the existing battery once; efficiencies are not applied twice.
-Its signed current feeds the existing SOC and C-rate-dependent SoH paths.
-This baseline uses Interpreted MATLAB Function blocks to call the shared,
-readable `.m` functions, so keep those files on the MATLAB path. It is a
-normal-mode simulation prototype, not a code-generation implementation.
+## Validation
 
-## Parameters in initialize_model.m
+`run_ev_ecvt` checks planetary kinematics, torque/power equilibrium, final-drive
+power, all motor limits, electrical conversion, battery current, C-rate,
+lookup coefficient, instantaneous degradation, and SOC/Ah/SOH integration.
+`check_ecvt_limits` checks all three strategies across 84 combinations of
+requests and regeneration limits against independent 40,001-point speed
+sweeps, plus zero resistance and lookup clipping. Requests include reverse
+travel, standstill, motoring, braking, torque saturation and overspeed.
 
-| Parameter | Default | Meaning |
-|---|---:|---|
-| `EV_topology` | 1 | Existing topology 1; new e-CVT 2 |
-| `vehicle_max_motor_power` | 160000 W | Total installed mechanical machine power |
-| `vehicle_max_motor_torque` | 900 Nm | Sum of machine torque ratings, not wheel torque |
-| `motor1_size_fraction`, `motor2_size_fraction` | 0.5, 0.5 | Positive fractions; sum must equal 1 |
-| `motor1_wmax`, `motor2_wmax` | 1256.637 rad/s | Shaft speed limits (12000 rpm) |
-| `motor1_regen_fraction`, `motor2_regen_fraction` | 1, 1 | Generating torque and power rating fractions |
-| `N_s`, `N_r` | 30, 78 | Sun/ring tooth counts; planet has 24 teeth |
-| `ecvt_final_ratio` | `EV_final` = 3 | Ring/wheel speed ratio |
-| `ecvt_final_efficiency` | `EV_drive_eta` = 0.96 | Lumped downstream efficiency |
-| `EV_motor_eta`, `EV_regen_eta` | 0.92, 0.85 | Shared motor/inverter efficiencies |
-
-Single-motor ratings equal the vehicle ratings. The two e-CVT ratings are
-fraction times vehicle ratings: defaults are 80 kW and 450 Nm per machine.
-Both sets (`single_motor1_*`, `ecvt_motor1_*`, `ecvt_motor2_*`) are derived
-centrally. `motor1_Pmax/Tmax` and `motor2_Pmax/Tmax` are convenience aliases
-for the topology selected when initialization runs. The e-CVT always uses
-its derived `ecvt_parameters`, allowing SimulationInput topology overrides
-without stale sizing. Edit the topology line before initialization if you
-also need the convenience aliases to reflect topology 2.
-
-The historical single-motor model had no envelope enforcement. It remains
-unchanged as requested; the new sizing variables do not retroactively limit
-its existing behavior. Re-run initialization after editing ratings/fractions.
-
-## Logs and validation
-
-In addition to all previous logs, the new choice logs:
-
-- `ecvt_requested_ring_torque`, `ecvt_requested_ring_speed`
-- `ecvt_ring_torque`, `ecvt_ring_speed`, `ecvt_mechanical_power`
-- `motor1_sun_speed`, `motor2_carrier_speed`
-- `motor1_torque`, `motor2_torque`
-- `motor1_mechanical_power`, `motor2_mechanical_power`
-- `motor1_electrical_power`, `motor2_electrical_power`
-- `ecvt_total_electrical_power`, `ecvt_objective_J`
-- `ecvt_feasible` (1=request achieved, 0=infeasible)
-- `ecvt_torque_shortfall`, `ecvt_speed_shortfall`
-
-`wheel_torque` remains the logged requested wheel/output torque. `battery_power`,
-`battery_current`, `SOC` and `SOH` retain their original names.
-
-`run_ev_ecvt` verifies Willis, torque equilibrium, ideal planetary and lossy
-final-drive power balance, all motor envelopes, electrical sign/efficiency,
-the electrical adapter, J and the unconstrained optimum at every default-cycle
-sample, plus battery current, SOC, Ah and SoH integration. `check_ecvt_limits`
-exercises nine extreme/constrained requests and compares against independent
-dense feasible-speed sweeps. `ecvt_planetary.feature` contains component-level
-Simulink scenarios for motoring, regeneration, torque clipping and overspeed.
-
-The default cycle is 100% feasible across 1601 samples. Final SOC is
-0.79494747, final SoH 0.9999987319, and throughput 1.580464 Ah. All 20 existing
-signals are bit-for-bit unchanged with topology 1 selected. Equal energy usage
-between topologies on this cycle is expected: constant efficiencies, equal
-lumped drivetrain loss and no opposite-direction power circulation imply the
-same battery demand. Speed minimization does not itself save modeled energy
-without speed-dependent losses or an efficiency map.
-
-All four Simulink component scenarios passed in draft and full-compilation
-modes (12/12 assessments). Select `EV_topology=2` in the workspace before
-running full-mode component tests, because Simulink Test cannot create a
-harness for an inactive variant choice. Structural connectivity checks passed.
+The default 160-second cycle has 1,601 samples and is fully feasible for all
+three strategies. Speed minimization gives final SOH 0.9999987319; current
+and degradation minimization both give 0.9999989346 (about 16% less accumulated
+modeled degradation). These are illustrative model results, not measured
+battery-life predictions.

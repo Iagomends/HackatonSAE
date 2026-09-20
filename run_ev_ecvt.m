@@ -36,12 +36,13 @@ pw = get('wheel_power'); ringExpected = pw/ecvt_final_efficiency;
 ringExpected(pw<0)=pw(pw<0)*ecvt_final_efficiency;
 assert(max(abs(tr.*wr-ringExpected))<1e-7,'Final drive power balance failed.');
 assert(max(abs(wr-get('wheel_speed')*ecvt_final_ratio))<1e-9);
-free = b*wr*motor2_wmax^2/(b^2*motor2_wmax^2+a^2*motor1_wmax^2);
 J = get('ecvt_objective_J');
-assert(max(abs(J-((ws/motor1_wmax).^2+(wc/motor2_wmax).^2)))<1e-12);
-% Default cycle lies inside the envelopes, so global quadratic minimum is exact.
-assert(max(abs(wc-free))<1e-8,'Unconstrained speed optimum not achieved.');
+assert(max(abs(J-get('ecvt_degradation_rate')))<1e-18);
 I = get('battery_current'); soc = get('SOC'); soh = get('SOH');
+assert(max(abs(I-get('ecvt_battery_current')))<1e-9);
+assert(max(abs(get('battery_Crate')-get('ecvt_battery_Crate')))<1e-12);
+assert(max(abs(get('degradation_rate')-get('ecvt_loss_per_Ah')))<1e-18);
+assert(max(abs(J-get('degradation_rate').*abs(I)/3600))<1e-18);
 assert(max(abs(get('battery_power')-(EV_voltage-EV_resistance*I).*I))<1e-6);
 assert(abs(soc(end)-(EV_SOC0-EV_dt*sum(I(1:end-1))/(3600*EV_capacity_Ah)))<1e-9);
 assert(all(diff(soh)<=1e-14) && all(soh>=0 & soh<=1));
